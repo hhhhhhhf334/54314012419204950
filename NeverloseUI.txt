@@ -1597,7 +1597,7 @@ SideDivider.Visible = true
                 Library._config._flags[settings.flag] = state
                 Config:save(game.GameId, Library._config)
                 settings.callback(state)
-                notifyState(state)
+                if not settings.silentNotifications then notifyState(state) end
             end
 
             local chooseModuleBinding = Library.BindKey(TextLabel,settings.flag,function()
