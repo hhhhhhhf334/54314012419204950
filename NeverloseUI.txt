@@ -815,8 +815,10 @@ function Library:create_ui()
     Shadow.Parent = NeverloseUI
     local function syncShadow()
         local size, position = Container.Size, Container.Position
-        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+44,size.Y.Scale,size.Y.Offset+44)
-        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+3)
+        local scale = self._ui_open and 1 or 0.3
+        Shadow.SliceScale = 0.975 * scale
+        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+44*scale,size.Y.Scale,size.Y.Offset+44*scale)
+        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+3*scale)
     end
     syncShadow()
     Connections.shadow_size = Container:GetPropertyChangedSignal('Size'):Connect(syncShadow)
@@ -1058,6 +1060,7 @@ SideDivider.Visible = true
 
     function self:change_visiblity(state: boolean)
         self._ui_open = state
+        syncShadow()
         Container.Visible = state or not self._hideMinimized
         Shadow.Visible = Container.Visible
         Handler.Minimize.Position = UDim2.fromOffset(state and 644 or 184,13)
