@@ -639,6 +639,11 @@ function Library.CreateBrand(parent, position, textSize, showLogo)
 end
 
 function Library.BindKey(button, flag, onPress, default, storage, onPaint)
+    if not Connections.binding_input_ended then
+        Connections.binding_input_ended = UserInputService.InputEnded:Connect(function(input)
+            if Library._bindingInput == input then Library._bindingInput = nil end
+        end)
+    end
     local flags = storage or Library._config._flags
     if type(flags[flag]) ~= 'string' then flags[flag] = default or '' end
     local function keyName(value)
@@ -664,10 +669,14 @@ function Library.BindKey(button, flag, onPress, default, storage, onPaint)
         paint(true)
         local capture
         capture = UserInputService.InputBegan:Connect(function(input, processed)
-            if processed and input.KeyCode ~= Enum.KeyCode.Escape then return end
+            if processed and input.KeyCode ~= Enum.KeyCode.Escape and UserInputService.GetFocusedTextBox
+                and UserInputService:GetFocusedTextBox() then return end
             if input.UserInputType ~= Enum.UserInputType.Keyboard and input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
             if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Unknown then return end
             Library._bindingInput = input
+            task.delay(0,function()
+                if Library._bindingInput == input then Library._bindingInput = nil end
+            end)
             local reset = input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace
             if reset then
                 if storage then flags[flag] = nil else flags[flag] = '' end
@@ -686,7 +695,7 @@ function Library.BindKey(button, flag, onPress, default, storage, onPaint)
         if input.UserInputType == Enum.UserInputType.MouseButton3 then choose() end
     end)
     Connections['binding_'..flag] = UserInputService.InputBegan:Connect(function(input, processed)
-        if processed or Library._choosing_keybind or Library._bindingInput == input then return end
+        if Library._choosing_keybind or Library._bindingInput == input then return end
         if UserInputService.GetFocusedTextBox and UserInputService:GetFocusedTextBox() then return end
         local key = input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name or input.UserInputType.Name
         if flags[flag] and flags[flag] ~= '' and key == keyName(flags[flag]) then onPress() end
@@ -801,13 +810,13 @@ function Library:create_ui()
     Shadow.ImageTransparency = 0
     Shadow.ScaleType = Enum.ScaleType.Slice
     Shadow.SliceCenter = Rect.new(32,32,64,64)
-    Shadow.SliceScale = 2.5
+    Shadow.SliceScale = 1.625
     Shadow.ZIndex = 1
     Shadow.Parent = NeverloseUI
     local function syncShadow()
         local size, position = Container.Size, Container.Position
-        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+112,size.Y.Scale,size.Y.Offset+112)
-        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+8)
+        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+73,size.Y.Scale,size.Y.Offset+73)
+        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+5)
     end
     syncShadow()
     Connections.shadow_size = Container:GetPropertyChangedSignal('Size'):Connect(syncShadow)
@@ -1557,9 +1566,14 @@ SideDivider.Visible = true
             Connections[settings.flag..'_content_size'] = contentLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
                 local content = contentLayout.AbsoluteContentSize
                 if not content or content.Y <= 0 then return end
-                ModuleManager._size = math.max(content.Y - ModuleManager._multiplier,0) + 14
-                Options.Size = UDim2.fromOffset(229,content.Y+14)
-                if ModuleManager._state then Module.Size = UDim2.fromOffset(229,baseHeight+content.Y+14) end
+                local last
+                for _, child in ipairs(Options:GetChildren()) do
+                    if child:IsA('GuiObject') and child.Visible and (not last or child.LayoutOrder >= last.LayoutOrder) then last = child end
+                end
+                local padding = last and (last.Name == 'Slider' or last.Name == 'DualSlider') and 22 or 14
+                ModuleManager._size = math.max(content.Y - ModuleManager._multiplier,0) + padding
+                Options.Size = UDim2.fromOffset(229,content.Y+padding)
+                if ModuleManager._state then Module.Size = UDim2.fromOffset(229,baseHeight+content.Y+padding) end
             end)
 
 
@@ -2217,9 +2231,9 @@ end
                 Options.Size = UDim2.fromOffset(229, self._size)
             
                 local Label = Instance.new('TextLabel')
-                Label.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-                Label.TextTransparency = 0.2
+                Label.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+                Label.TextColor3 = Color3.fromRGB(145,145,152)
+                Label.TextTransparency = 0
                 Label.Text = settings.title or "Enter text"
                 Label.Size = UDim2.new(0, 205, 0, 13)
                 Label.AnchorPoint = Vector2.new(0, 0)
@@ -2234,6 +2248,7 @@ end
                 LayoutOrderModule += 1
                 local Textbox = Instance.new('TextBox')
                 Textbox.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json')
+                Textbox.PlaceholderColor3 = Color3.fromRGB(104,104,113)
                 Textbox.TextColor3 = Color3.fromRGB(255, 255, 255)
                 Textbox.BorderColor3 = Color3.fromRGB(12, 12, 14)
                 Textbox.PlaceholderText = settings.placeholder or "Enter text..."
@@ -2247,15 +2262,28 @@ end
                 padding.PaddingLeft = UDim.new(0, 9)
                 padding.PaddingRight = UDim.new(0, 9)
                 padding.Parent = Textbox
-                Textbox.BackgroundColor3 = Color3.fromRGB(24,24,27)
+                Textbox.BackgroundColor3 = Color3.fromRGB(19,19,22)
                 Textbox.BackgroundTransparency = 0
                 Textbox.ClearTextOnFocus = false
                 Textbox.Parent = Options
                 Textbox.LayoutOrder = LayoutOrderModule
             
                 local UICorner = Instance.new('UICorner')
-                UICorner.CornerRadius = UDim.new(0, 4)
+                UICorner.CornerRadius = UDim.new(0, 7)
                 UICorner.Parent = Textbox
+                local textboxStroke = Instance.new('UIStroke')
+                textboxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                textboxStroke.Color = Color3.fromRGB(48,48,54)
+                textboxStroke.Transparency = 0.35
+                textboxStroke.Thickness = 1
+                textboxStroke.Parent = Textbox
+                local function focusTextbox(focused)
+                    TweenService:Create(textboxStroke,TweenInfo.new(0.15),{
+                        Color = focused and Color3.fromRGB(205,205,213) or Color3.fromRGB(48,48,54),
+                        Transparency = focused and 0.1 or 0.35
+                    }):Play()
+                end
+                Textbox.Focused:Connect(function() focusTextbox(true) end)
             
                 function TextboxManager:update_text(text: string)
                     self._text = text
@@ -2270,6 +2298,7 @@ end
                 end
             
                 Textbox.FocusLost:Connect(function()
+                    focusTextbox(false)
                     TextboxManager:update_text(Textbox.Text)
                 end)
             
