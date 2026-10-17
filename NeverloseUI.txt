@@ -638,25 +638,46 @@ function Library.CreateBrand(parent, position, textSize, showLogo)
     return brand
 end
 
-function Library.BindKey(button, flag, onPress, default)
-    local flags = Library._config._flags
+function Library.BindKey(button, flag, onPress, default, storage, onPaint)
+    local flags = storage or Library._config._flags
     if type(flags[flag]) ~= 'string' then flags[flag] = default or '' end
-    local function paint() button.Text = flags[flag] ~= '' and flags[flag] or '...' end
-    paint()
+    local function keyName(value)
+        return tostring(value):gsub('Enum.KeyCode%.',''):gsub('Enum.UserInputType%.','')
+    end
+    local stroke = storage and button.Parent:FindFirstChildWhichIsA('UIStroke')
+    local normalColor = button.TextColor3
+    local function paint(choosing)
+        button.Text = choosing and '?' or (flags[flag] and flags[flag] ~= '' and keyName(flags[flag]) or '...')
+        button.TextColor3 = choosing and Color3.fromRGB(255,255,255) or normalColor
+        if stroke then
+            TweenService:Create(stroke,TweenInfo.new(0.12),{
+                Color = choosing and Color3.fromRGB(235,235,240) or Color3.fromRGB(45,45,50),
+                Transparency = choosing and 0.1 or 0.5
+            }):Play()
+        end
+        if onPaint then onPaint(button.Text) end
+    end
+    paint(false)
     local function choose()
         if Library._choosing_keybind then return end
         Library._choosing_keybind = true
-        button.Text = '...'
+        paint(true)
         local capture
-        capture = UserInputService.InputBegan:Connect(function(input)
+        capture = UserInputService.InputBegan:Connect(function(input, processed)
+            if processed and input.KeyCode ~= Enum.KeyCode.Escape then return end
             if input.UserInputType ~= Enum.UserInputType.Keyboard and input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Unknown then return end
             Library._bindingInput = input
             local reset = input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace
-            flags[flag] = reset and (default or '') or (input.UserInputType == Enum.UserInputType.MouseButton3 and 'MouseButton3' or input.KeyCode.Name)
+            if reset then
+                if storage then flags[flag] = nil else flags[flag] = '' end
+            else
+                flags[flag] = input.UserInputType == Enum.UserInputType.MouseButton3 and 'MouseButton3' or input.KeyCode.Name
+            end
             Config:save(game.GameId, Library._config)
             Library._choosing_keybind = false
             capture:Disconnect()
-            paint()
+            paint(false)
         end)
         Connections['capture_'..flag] = capture
     end
@@ -668,7 +689,7 @@ function Library.BindKey(button, flag, onPress, default)
         if processed or Library._choosing_keybind or Library._bindingInput == input then return end
         if UserInputService.GetFocusedTextBox and UserInputService:GetFocusedTextBox() then return end
         local key = input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name or input.UserInputType.Name
-        if flags[flag] ~= '' and key == flags[flag] then onPress() end
+        if flags[flag] and flags[flag] ~= '' and key == keyName(flags[flag]) then onPress() end
     end)
     return choose
 end
@@ -780,12 +801,13 @@ function Library:create_ui()
     Shadow.ImageTransparency = 0
     Shadow.ScaleType = Enum.ScaleType.Slice
     Shadow.SliceCenter = Rect.new(32,32,64,64)
+    Shadow.SliceScale = 2.5
     Shadow.ZIndex = 1
     Shadow.Parent = NeverloseUI
     local function syncShadow()
         local size, position = Container.Size, Container.Position
-        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+32,size.Y.Scale,size.Y.Offset+32)
-        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+4)
+        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+112,size.Y.Scale,size.Y.Offset+112)
+        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+8)
     end
     syncShadow()
     Connections.shadow_size = Container:GetPropertyChangedSignal('Size'):Connect(syncShadow)
@@ -1458,11 +1480,11 @@ SideDivider.Visible = true
             local Keybind = Instance.new('Frame')
             Keybind.Name = 'Keybind'
             Keybind.BackgroundTransparency = 0
-            Keybind.Position = UDim2.fromOffset(14, 54)
+            Keybind.Position = UDim2.fromOffset(14, 55)
             Keybind.BorderColor3 = Color3.fromRGB(12, 12, 14)
-            Keybind.Size = UDim2.fromOffset(26,22)
+            Keybind.Size = UDim2.fromOffset(18,18)
             Keybind.BorderSizePixel = 0
-            Keybind.BackgroundColor3 = Color3.fromRGB(22,22,25)
+            Keybind.BackgroundColor3 = Color3.fromRGB(18,18,21)
             Keybind.Parent = Header
             
             local UICorner = Instance.new('UICorner')
@@ -1474,11 +1496,12 @@ SideDivider.Visible = true
             keyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
             keyStroke.Parent = Keybind
             
-            local TextLabel = Instance.new('TextLabel')
+            local TextLabel = Instance.new('TextButton')
+            TextLabel.AutoButtonColor = false
             TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
             TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
             TextLabel.BorderColor3 = Color3.fromRGB(12, 12, 14)
-            TextLabel.Text = '−'
+            TextLabel.Text = '...'
             TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
             TextLabel.Size = UDim2.new(0, 25, 0, 13)
             TextLabel.BackgroundTransparency = 1
@@ -1530,6 +1553,15 @@ SideDivider.Visible = true
             UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout.Parent = Options
+            local contentLayout = UIListLayout
+            Connections[settings.flag..'_content_size'] = contentLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
+                local content = contentLayout.AbsoluteContentSize
+                if not content or content.Y <= 0 then return end
+                ModuleManager._size = math.max(content.Y - ModuleManager._multiplier,0) + 14
+                Options.Size = UDim2.fromOffset(229,content.Y+14)
+                if ModuleManager._state then Module.Size = UDim2.fromOffset(229,baseHeight+content.Y+14) end
+            end)
+
 
             local notifyState = Library:bind_notifications(Header, settings.flag, settings.title or '', UDim2.new(1,-69,0,55))
             function ModuleManager:change_state(state: boolean)
@@ -1553,121 +1585,24 @@ SideDivider.Visible = true
                 notifyState(state)
             end
 
-            function ModuleManager:connect_keybind()
-                if not Library._config._keybinds[settings.flag] then
-                    return
-                end
-
-                Connections[settings.flag..'_keybind'] = UserInputService.InputBegan:Connect(function(input: InputObject, process: boolean)
-                    if process then
-                        return
-                    end
-                    
-                    if tostring(input.KeyCode) ~= Library._config._keybinds[settings.flag] then
-                        return
-                    end
-                    
-                    self:change_state(not self._state)
-                end)
-            end
-
-            function ModuleManager:scale_keybind(empty: boolean)
-                if Library._config._keybinds[settings.flag] and not empty then
-                    local keybind_string = string.gsub(tostring(Library._config._keybinds[settings.flag]), 'Enum.KeyCode.', '')
-
-                    local font_params = Instance.new('GetTextBoundsParams')
-                    font_params.Text = keybind_string
-                    font_params.Font = TextLabel.FontFace
-                    font_params.Size = 11
-                    font_params.Width = 10000
-            
-                    local font_size = TextService:GetTextBoundsAsync(font_params)
-                    
-                    Keybind.Size = UDim2.fromOffset(math.max(font_size.X + 12,26),22)
-                    TextLabel.Size = UDim2.fromOffset(font_size.X, 13)
-                else
-                    Keybind.Size = UDim2.fromOffset(26,22)
-                    TextLabel.Size = UDim2.fromOffset(20,13)
-                end
-            end
-
-            if Library:flag_type(settings.flag, 'boolean') then
-                ModuleManager:change_state(Library._config._flags[settings.flag])
-            end
-
-            if Library._config._keybinds[settings.flag] then
-                local keybind_string = string.gsub(tostring(Library._config._keybinds[settings.flag]), 'Enum.KeyCode.', '')
-                TextLabel.Text = keybind_string
-
-                ModuleManager:connect_keybind()
-                ModuleManager:scale_keybind()
-            end
-
-            Connections[settings.flag..'_input_began'] = Header.InputBegan:Connect(function(input: InputObject)
-                if Library._choosing_keybind then
-                    return
-                end
-
-                if input.UserInputType ~= Enum.UserInputType.MouseButton3 then
-                    return
-                end
-                
-                Library._choosing_keybind = true
-                
-                Connections['keybind_choose_start'] = UserInputService.InputBegan:Connect(function(input: InputObject, process: boolean)
-                    if process and input.KeyCode ~= Enum.KeyCode.Escape then
-                        return
-                    end
-                    
-                    if input == Enum.UserInputState or input == Enum.UserInputType then
-                        return
-                    end
-
-                    if input.KeyCode == Enum.KeyCode.Unknown then
-                        return
-                    end
-
-                    if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
-                        ModuleManager:scale_keybind(true)
-
-                        Library._config._keybinds[settings.flag] = nil
-                        Config:save(game.GameId, Library._config)
-
-                        TextLabel.Text = 'None'
-                        
-                        if Connections[settings.flag..'_keybind'] then
-                            Connections[settings.flag..'_keybind']:Disconnect()
-                            Connections[settings.flag..'_keybind'] = nil
-                        end
-
-                        Connections['keybind_choose_start']:Disconnect()
-                        Connections['keybind_choose_start'] = nil
-
-                        Library._choosing_keybind = false
-
-                        return
-                    end
-                    
-                    Connections['keybind_choose_start']:Disconnect()
-                    Connections['keybind_choose_start'] = nil
-                    
-                    Library._config._keybinds[settings.flag] = tostring(input.KeyCode)
-                    Config:save(game.GameId, Library._config)
-
-                    if Connections[settings.flag..'_keybind'] then
-                        Connections[settings.flag..'_keybind']:Disconnect()
-                        Connections[settings.flag..'_keybind'] = nil
-                    end
-
-                    ModuleManager:connect_keybind()
-                    ModuleManager:scale_keybind()
-                    
-                    Library._choosing_keybind = false
-
-                    local keybind_string = string.gsub(tostring(Library._config._keybinds[settings.flag]), 'Enum.KeyCode.', '')
-                    TextLabel.Text = keybind_string
-                end)
+            local chooseModuleBinding = Library.BindKey(TextLabel,settings.flag,function()
+                if not settings.compact then ModuleManager:change_state(not ModuleManager._state) end
+            end,nil,Library._config._keybinds,function(text)
+                local params = Instance.new('GetTextBoundsParams')
+                params.Text = text
+                params.Font = TextLabel.FontFace
+                params.Size = 10
+                params.Width = 500
+                local width = math.max(math.ceil(TextService:GetTextBoundsAsync(params).X)+8,18)
+                if text == '?' or text == '...' then width = 18 end
+                Keybind.Size = UDim2.fromOffset(width,18)
+                TextLabel.Size = UDim2.fromScale(1,1)
+                TextLabel.TextSize = 10
             end)
+            Connections[settings.flag..'_input_began'] = Header.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton3 then chooseModuleBinding() end
+            end)
+            if Library:flag_type(settings.flag,'boolean') then ModuleManager:change_state(Library._config._flags[settings.flag]) end
 
             Header.MouseButton1Click:Connect(function()
                 if not settings.compact then ModuleManager:change_state(not ModuleManager._state) end
@@ -2402,7 +2337,8 @@ end
                 KeybindCorner.CornerRadius = UDim.new(0, 6)
                 KeybindCorner.Parent = KeybindBox
             
-                local KeybindLabel = Instance.new("TextLabel")
+                local KeybindLabel = Instance.new("TextButton")
+                KeybindLabel.AutoButtonColor = false
                 KeybindLabel.Name = "KeybindLabel"
                 KeybindLabel.Size = UDim2.new(1, 0, 1, 0)
                 KeybindLabel.BackgroundTransparency = 1
@@ -2469,59 +2405,13 @@ end
                     CheckboxManager:change_state(not CheckboxManager._state)
                 end)
             
-                Checkbox.InputBegan:Connect(function(input, gameProcessed)
-                    if gameProcessed then return end
-                    if input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
-                    if Library._choosing_keybind then return end
-            
-                    Library._choosing_keybind = true
-                    local chooseConnection
-                    chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
-                        if processed and keyInput.KeyCode ~= Enum.KeyCode.Escape then return end
-                        if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                        if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
-            
-                        if keyInput.KeyCode == Enum.KeyCode.Backspace or keyInput.KeyCode == Enum.KeyCode.Escape then
-                            ModuleManager:scale_keybind(true)
-                            Library._config._keybinds[settings.flag] = nil
-                            Config:save(game.GameId, Library._config)
-                            KeybindLabel.Text = "..."
-                            if Connections[settings.flag .. "_keybind"] then
-                                Connections[settings.flag .. "_keybind"]:Disconnect()
-                                Connections[settings.flag .. "_keybind"] = nil
-                            end
-                            chooseConnection:Disconnect()
-                            Library._choosing_keybind = false
-                            return
-                        end
-            
-                        chooseConnection:Disconnect()
-                        Library._config._keybinds[settings.flag] = tostring(keyInput.KeyCode)
-                        Config:save(game.GameId, Library._config)
-                        if Connections[settings.flag .. "_keybind"] then
-                            Connections[settings.flag .. "_keybind"]:Disconnect()
-                            Connections[settings.flag .. "_keybind"] = nil
-                        end
-                        ModuleManager:connect_keybind()
-                        ModuleManager:scale_keybind()
-                        Library._choosing_keybind = false
-            
-                        local keybind_string = string.gsub(tostring(Library._config._keybinds[settings.flag]), "Enum.KeyCode.", "")
-                        KeybindLabel.Text = keybind_string
-                    end)
+                local chooseCheckboxBinding = Library.BindKey(KeybindLabel,settings.flag,function()
+                    CheckboxManager:change_state(not CheckboxManager._state)
+                end,nil,Library._config._keybinds)
+                Checkbox.InputBegan:Connect(function(input, processed)
+                    if not processed and input.UserInputType == Enum.UserInputType.MouseButton3 then chooseCheckboxBinding() end
                 end)
-            
-                local keyPressConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                    if gameProcessed then return end
-                    if input.UserInputType == Enum.UserInputType.Keyboard then
-                        local storedKey = Library._config._keybinds[settings.flag]
-                        if storedKey and tostring(input.KeyCode) == storedKey then
-                            CheckboxManager:change_state(not CheckboxManager._state)
-                        end
-                    end
-                end)
-                Connections[settings.flag .. "_keypress"] = keyPressConnection
-            
+
                 return CheckboxManager
             end
 
@@ -2691,8 +2581,8 @@ end
                 
                 local UIGradient = Instance.new('UIGradient')
                 UIGradient.Color = ColorSequence.new{
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-                    ColorSequenceKeypoint.new(1, Color3.fromRGB(235, 235, 240))
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(70,70,76)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
                 }
                 UIGradient.Parent = Fill
                 
