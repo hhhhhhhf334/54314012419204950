@@ -810,13 +810,13 @@ function Library:create_ui()
     Shadow.ImageTransparency = 0
     Shadow.ScaleType = Enum.ScaleType.Slice
     Shadow.SliceCenter = Rect.new(32,32,64,64)
-    Shadow.SliceScale = 1.625
+    Shadow.SliceScale = 0.975
     Shadow.ZIndex = 1
     Shadow.Parent = NeverloseUI
     local function syncShadow()
         local size, position = Container.Size, Container.Position
-        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+73,size.Y.Scale,size.Y.Offset+73)
-        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+5)
+        Shadow.Size = UDim2.new(size.X.Scale,size.X.Offset+44,size.Y.Scale,size.Y.Offset+44)
+        Shadow.Position = UDim2.new(position.X.Scale,position.X.Offset,position.Y.Scale,position.Y.Offset+3)
     end
     syncShadow()
     Connections.shadow_size = Container:GetPropertyChangedSignal('Size'):Connect(syncShadow)
